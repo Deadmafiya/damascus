@@ -1,0 +1,65 @@
+# Damascus OS — live ISO package list
+# Philosophy: keep the live image LEAN. Ship the base system, networking,
+# and a small set of always-reach-for tools. The full pentest arsenal is
+# pulled on demand via `damascus-arsenal` (see /usr/local/bin/damascus-arsenal).
+# Every package here is from the official Arch repos (core/extra) — no AUR.
+
+## --- base system ---
+base
+linux
+linux-firmware
+mkinitcpio
+mkinitcpio-archiso
+sudo
+syslinux
+qemu-guest-agent
+
+## --- shell & editors ---
+vim
+neovim
+tmux
+zsh
+less
+man-db
+man-pages
+
+## --- system / inspection ---
+htop
+lsof
+usbutils
+pciutils
+dmidecode
+rsync
+pv
+
+## --- networking core ---
+iproute2
+iputils
+bind
+openssh
+networkmanager
+openvpn
+wireguard-tools
+mtr
+traceroute
+
+## --- fetch ---
+curl
+wget
+aria2
+
+## --- the "always handy" hacker baseline ---
+# small, fast, and useful from the first boot — heavier tooling is on-demand
+nmap
+tcpdump
+socat
+openbsd-netcat
+proxychains-ng
+macchanger
+git
+python
+python-pip
+base-devel
+jq
+ripgrep
+fd

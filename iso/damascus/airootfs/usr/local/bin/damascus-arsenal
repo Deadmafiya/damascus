@@ -1,0 +1,184 @@
+#!/usr/bin/env bash
+# damascus-arsenal — on-demand pentest toolkit installer for Damascus OS
+#
+# The live ISO ships lean. This tool pulls the heavier arsenal on demand,
+# grouped by purpose, using ONLY the official Arch repositories (core/extra).
+# No AUR, no third-party repos — what you install here is signed by Arch.
+#
+# Usage:
+#   damascus-arsenal                 # interactive menu
+#   damascus-arsenal list            # list all groups
+#   damascus-arsenal show <group>    # show packages in a group
+#   damascus-arsenal install <group>...   # install one or more groups
+#   damascus-arsenal install all     # install everything
+#   damascus-arsenal search <term>   # find which group(s) contain a tool
+#
+# Exit codes: 0 ok, 1 usage error, 2 pacman failure.
+
+set -uo pipefail
+
+# ---- presentation -----------------------------------------------------------
+if [[ -t 1 ]]; then
+  C_RESET=$'\e[0m'; C_BOLD=$'\e[1m'; C_CYAN=$'\e[36m'
+  C_GREEN=$'\e[32m'; C_YEL=$'\e[33m'; C_RED=$'\e[31m'; C_DIM=$'\e[2m'
+else
+  C_RESET=; C_BOLD=; C_CYAN=; C_GREEN=; C_YEL=; C_RED=; C_DIM=
+fi
+
+banner() {
+  printf '%s' "$C_CYAN$C_BOLD"
+  cat <<'EOF'
+  ╔══════════════════════════════════════════════╗
+  ║   DAMASCUS ARSENAL — forge your loadout        ║
+  ╚══════════════════════════════════════════════╝
+EOF
+  printf '%s' "$C_RESET"
+}
+
+err()  { printf '%s[!]%s %s\n' "$C_RED"  "$C_RESET" "$*" >&2; }
+info() { printf '%s[*]%s %s\n' "$C_CYAN" "$C_RESET" "$*"; }
+ok()   { printf '%s[+]%s %s\n' "$C_GREEN" "$C_RESET" "$*"; }
+
+# ---- tool groups ------------------------------------------------------------
+# Each group is "key|Human description". Packages live in pkgs_<key>().
+# ALL package names below are verified present in official Arch repos.
+# NOTE: not named GROUPS — that's a bash special array (current user's GIDs).
+ARSENAL_GROUPS=(
+  "recon|Network discovery, scanning & enumeration"
+  "web|Web app testing & directory busting"
+  "exploit|Exploitation frameworks & databases"
+  "cracking|Password & hash cracking"
+  "wireless|Wi-Fi auditing & attacks"
+  "sniffing|Traffic capture, MITM & spoofing"
+  "reversing|Reverse engineering, debugging & disasm"
+  "forensics|Disk, memory & file forensics"
+  "crypto|Crypto, malware ID & secrets"
+  "anon|Anonymity, tunneling & pivoting"
+  "dev|Languages & exploit-dev toolchain"
+)
+
+pkgs_recon()    { echo nmap masscan rustscan arp-scan whois ldns nikto smbclient samba net-snmp nbtscan dnsmasq; }
+pkgs_web()      { echo gobuster wpscan zaproxy nikto sqlmap testssl.sh sslscan; }
+pkgs_exploit()  { echo metasploit exploitdb; }
+pkgs_cracking() { echo john hashcat hashcat-utils hydra medusa ncrack; }
+pkgs_wireless() { echo aircrack-ng reaver bully mdk4 hostapd wpa_supplicant iw wireless_tools pixiewps cowpatty hcxtools hcxdumptool kismet; }
+pkgs_sniffing() { echo wireshark-cli wireshark-qt termshark tcpdump ettercap dsniff bettercap mitmproxy hping netsniff-ng; }
+pkgs_reversing(){ echo radare2 rizin cutter ghidra gdb pwndbg gef ltrace strace binwalk jadx; }
+pkgs_forensics(){ echo testdisk sleuthkit foremost ddrescue perl-image-exiftool; }
+pkgs_crypto()   { echo yara clamav openssl gnupg hexedit ghex; }
+pkgs_anon()     { echo tor torsocks proxychains-ng openvpn wireguard-tools macchanger; }
+pkgs_dev()      { echo gcc base-devel python python-pip python-pwntools python-scapy impacket go rust; }
+
+# NOTE: a few well-known tools are AUR-only and intentionally excluded under
+# the official-repos-only policy: ffuf, feroxbuster, wfuzz, crunch, seclists,
+# rockyou/wordlists, evil-winrm, netexec/crackmapexec, dirb, responder,
+# theharvester, dnsenum/dnsrecon, volatility(2), autopsy, frida, apktool,
+# steghide, wapiti, whatweb, extundelete. Install those yourself with an AUR
+# helper if you need them. (exiftool ships as the official "perl-image-exiftool".)
+
+group_keys() { local g; for g in "${ARSENAL_GROUPS[@]}"; do echo "${g%%|*}"; done; }
+group_desc() { local g; for g in "${ARSENAL_GROUPS[@]}"; do [[ "${g%%|*}" == "$1" ]] && { echo "${g#*|}"; return; }; done; }
+group_pkgs() { "pkgs_$1" 2>/dev/null; }
+is_group()   { local k; for k in $(group_keys); do [[ "$k" == "$1" ]] && return 0; done; return 1; }
+
+# ---- actions ----------------------------------------------------------------
+do_list() {
+  banner
+  printf '%sAvailable groups:%s\n\n' "$C_BOLD" "$C_RESET"
+  local k
+  for k in $(group_keys); do
+    printf '  %s%-11s%s %s\n' "$C_GREEN" "$k" "$C_RESET" "$(group_desc "$k")"
+    printf '    %s%s%s\n' "$C_DIM" "$(group_pkgs "$k")" "$C_RESET"
+  done
+  printf '\n%sInstall with:%s damascus-arsenal install <group> [group...]\n' "$C_BOLD" "$C_RESET"
+  printf '%sEverything:%s   damascus-arsenal install all\n' "$C_BOLD" "$C_RESET"
+}
+
+do_show() {
+  local g="$1"
+  is_group "$g" || { err "unknown group: $g  (try: damascus-arsenal list)"; return 1; }
+  printf '%s%s%s — %s\n' "$C_BOLD" "$g" "$C_RESET" "$(group_desc "$g")"
+  local p
+  for p in $(group_pkgs "$g"); do printf '  %s\n' "$p"; done
+}
+
+do_search() {
+  local term="$1" hit=0 k p
+  for k in $(group_keys); do
+    for p in $(group_pkgs "$k"); do
+      if [[ "$p" == *"$term"* ]]; then
+        printf '  %s%-18s%s in group %s%s%s\n' "$C_GREEN" "$p" "$C_RESET" "$C_CYAN" "$k" "$C_RESET"
+        hit=1
+      fi
+    done
+  done
+  [[ "$hit" == 0 ]] && { info "no official-repo tool matching '$term' in any group"; return 1; }
+}
+
+do_install() {
+  local groups=("$@") pkgs=() k
+  if [[ "${groups[0]:-}" == "all" ]]; then
+    mapfile -t groups < <(group_keys)
+  fi
+  for k in "${groups[@]}"; do
+    is_group "$k" || { err "unknown group: $k"; return 1; }
+    # shellcheck disable=SC2207
+    pkgs+=( $(group_pkgs "$k") )
+  done
+  # de-dup (nikto appears in recon and web, etc.)
+  mapfile -t pkgs < <(printf '%s\n' "${pkgs[@]}" | sort -u)
+
+  info "groups: ${groups[*]}"
+  info "${#pkgs[@]} packages: ${pkgs[*]}"
+
+  local SUDO=""
+  [[ $EUID -ne 0 ]] && SUDO="sudo"
+  info "running: $SUDO pacman -S --needed ${pkgs[*]}"
+  if $SUDO pacman -S --needed "${pkgs[@]}"; then
+    ok "arsenal installed."
+  else
+    err "pacman failed — check mirrors / disk space / package availability."
+    return 2
+  fi
+}
+
+do_menu() {
+  banner
+  do_list
+  printf '\n%sEnter group names (space-separated), "all", or "q" to quit:%s\n> ' "$C_BOLD" "$C_RESET"
+  local line; read -r line || return 0
+  [[ -z "$line" || "$line" == "q" ]] && { info "nothing to do."; return 0; }
+  # shellcheck disable=SC2086
+  do_install $line
+}
+
+usage() {
+  cat <<EOF
+${C_BOLD}damascus-arsenal${C_RESET} — on-demand pentest toolkit (official repos only)
+
+  damascus-arsenal                      interactive menu
+  damascus-arsenal list                 list all groups + packages
+  damascus-arsenal show <group>         show one group's packages
+  damascus-arsenal search <term>        find which group has a tool
+  damascus-arsenal install <group>...   install one or more groups
+  damascus-arsenal install all          install everything
+
+Groups: $(group_keys | tr '\n' ' ')
+EOF
+}
+
+# ---- dispatch ---------------------------------------------------------------
+main() {
+  local cmd="${1:-menu}"; shift || true
+  case "$cmd" in
+    menu)            do_menu ;;
+    list|ls)         do_list ;;
+    show)            [[ $# -ge 1 ]] || { usage; exit 1; }; do_show "$1" ;;
+    search|find)     [[ $# -ge 1 ]] || { usage; exit 1; }; do_search "$1" ;;
+    install|add|i)   [[ $# -ge 1 ]] || { usage; exit 1; }; do_install "$@" ;;
+    -h|--help|help)  usage ;;
+    *)               err "unknown command: $cmd"; usage; exit 1 ;;
+  esac
+}
+
+main "$@"

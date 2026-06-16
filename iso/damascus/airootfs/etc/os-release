@@ -1,0 +1,13 @@
+NAME="Damascus OS"
+PRETTY_NAME="Damascus OS"
+ID=damascus
+ID_LIKE=arch
+BUILD_ID=rolling
+DOC_URL="https://github.com/deadmafia/damascus"
+HOME_URL="https://github.com/deadmafia/damascus"
+SUPPORT_URL="https://github.com/deadmafia/damascus"
+BUG_REPORT_URL="https://github.com/deadmafia/damascus"
+PRIVACY_POLICY_URL="https://github.com/deadmafia/damascus"
+VERSION_ID=0.1
+ANSI_COLOR="0;36"
+LOGO=damascus-logo

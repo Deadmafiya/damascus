@@ -1,0 +1,26 @@
+# ── Vendored upstream sources (build inputs, not Damascus source) ──
+# These are clones of upstream Arch/Linux repos used as build inputs.
+# Each has its own history and is large; reconstruct via assets/clone-all.sh.
+/kernel/
+/packages/
+/build-system/
+
+# ── Build artifacts ──
+/assets/iso-out/
+*.iso
+*.img
+*.qcow2
+/var/tmp/archiso-work-*/
+
+# ── Logs & scratch ──
+*.log
+/assets/clone.log
+
+# ── Local agent / editor config (machine-specific) ──
+/.claude/
+*.swp
+*~
+
+# ── OS cruft ──
+.DS_Store
+Thumbs.db
